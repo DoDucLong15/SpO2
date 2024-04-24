@@ -1,2 +1,16 @@
 # SpO2
 Đo nhịp tim và nồng độ O2
+
+#SSD1306
+GND ~ GND
+VCC ~ 3.3V
+SCL ~ GPIO22
+SDA ~ GPIO21
+
+#MAX30102
+GND ~ GND
+VCC ~ 3.3V
+SCL ~ GPIO22
+SDA ~ GPIO21
+
+#Buzzer
