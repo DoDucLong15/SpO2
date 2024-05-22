@@ -32,7 +32,7 @@ void onBeatDetected()
 }
 void setup()
 {
-  Serial.begin(921600);
+  Serial.begin(115200);
   Serial.println("SSD1306 128x64 OLED TEST");
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {

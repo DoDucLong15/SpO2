@@ -1,0 +1,223 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <Wire.h>
+#include "MAX30105.h"           //Khai báo thư viện MAX3010x
+#include "heartRate.h"          //Thuật toán tính toán nhịp tim
+
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE); //init oled
+MAX30105 particleSensor; //init max30102
+
+const byte RATE_SIZE = 4; //Tăng số này lớn hơn 4 là được
+byte rates[RATE_SIZE]; 
+byte rateSpot = 0;
+long lastBeat = 0; 
+float beatsPerMinute;
+int beatAvg;
+
+typedef u8g2_uint_t u8g_uint_t;
+u8g_uint_t xPos = 0; //khoi tao gia tri ve hinh
+
+void setup()
+{
+  Serial.begin(115200);
+  //khoi tao oled
+  u8g2.begin();
+  u8g2.setFont(u8g2_font_6x10_tf); //font chu
+  u8g2.setFontRefHeightExtendedText();
+  u8g2.setDrawColor(1); //mau chu
+  u8g2.setFontPosTop();
+  u8g2.setFontDirection(0); //chu thang
+  //giao dien khoi dong chuong trinh
+  u8g2.clearBuffer(); 
+  u8g2.drawStr(20, 18, "Pulse OxiMeter");
+  u8g_uint_t temp1 = 0;
+  u8g_uint_t temp2 = 40;
+  u8g_uint_t temp3 = 80;
+  heart_beat(&temp1);
+  heart_beat(&temp2);
+  heart_beat(&temp3);
+  u8g2.sendBuffer();
+  xPos = 0;
+  delay(2000);
+  u8g2.clearBuffer();
+
+  // Initialize sensor
+  particleSensor.begin(Wire, I2C_SPEED_FAST); //Use default I2C port, 400kHz speed
+  particleSensor.setup(); //Configure sensor with default settings
+  particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
+}
+
+void loop()
+{
+  long irValue = particleSensor.getIR();    //Reading the IR value it will permit us to know if there's a finger on the sensor or not
+  if(irValue > 7000){  //If finger is detected
+    if (checkForBeat(irValue) == true)                        //If a heart beat is detected
+    {
+      long delta = millis() - lastBeat;                   //Measure duration between two beats
+      lastBeat = millis();
+      beatsPerMinute = 60 / (delta / 1000.0);           //Calculating the BPM
+      if (beatsPerMinute < 255 && beatsPerMinute > 20)               //To calculate the average we strore some values (4) then do some math to calculate the average
+      {
+        rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
+        rateSpot %= RATE_SIZE; //Wrap variable
+        //Take average of readings
+        beatAvg = 0;
+        for (byte x = 0 ; x < RATE_SIZE ; x++)
+          beatAvg += rates[x];
+        beatAvg /= RATE_SIZE;
+      }
+      //in gia tri ra man hinh
+      u8g2.clearBuffer();
+      display_data(beatAvg,0);   
+      drawLine(&xPos); 
+      heart_beat(&xPos);
+      u8g2.sendBuffer();                                      
+    }
+  }
+  if (irValue < 7000){ //If no finger is detected it inform the user and put the average BPM to 0 or it will be stored for the next measure
+    u8g2.clearBuffer();      
+    beatAvg=0;
+    display_data(beatAvg,0); 
+    drawLine(&xPos); 
+    u8g2.sendBuffer();
+  }
+}
+
+int32_t calculateSpo2()
+{
+  
+}
+
+void display_data(int bpm, int spo2) {
+  char s1[15];
+  snprintf(s1, sizeof(s1), "BPM %d", bpm);
+  char s2[15];
+  snprintf(s2, sizeof(s2), "Spo2%% %d", spo2);
+  u8g2.drawStr(0, 18, s1);
+  u8g2.drawStr(64, 18, s2);
+}
+
+void drawLine(u8g_uint_t *x_pos) {
+  // Draw a single pixel in white
+  int i = 0;
+  while(i <= 6 && *x_pos < u8g2.getDisplayWidth()) {
+    u8g2.drawPixel(*x_pos, 8);
+    u8g2.drawPixel((*x_pos)++, 8);
+    u8g2.drawPixel((*x_pos)++, 8);
+    u8g2.drawPixel((*x_pos)++, 8);
+    u8g2.drawPixel((*x_pos), 8);
+    i++;
+  }
+  //Serial.println(*x_pos);
+  // u8g2.drawBox(*x_pos, 0, 31, 16);
+  delay(1);
+  if (*x_pos >= u8g2.getDisplayWidth()) {
+    *x_pos = 0;
+  }
+}
+
+void heart_beat(u8g_uint_t* x_pos) {
+  /************************************************/
+  //display.clearDisplay();
+  // u8g2.drawBox(*x_pos, 0, 30, 15);
+  // Draw a single pixel in white
+  u8g2.drawPixel(*x_pos + 0, 8);
+  u8g2.drawPixel(*x_pos + 1, 8);
+  u8g2.drawPixel(*x_pos + 2, 8);
+  u8g2.drawPixel(*x_pos + 3, 8);
+  u8g2.drawPixel(*x_pos + 4, 8); // -----
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 5, 7);
+  u8g2.drawPixel(*x_pos + 6, 6);
+  u8g2.drawPixel(*x_pos + 7, 7); // .~.
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 8, 8);
+  u8g2.drawPixel(*x_pos + 9, 8); // --
+  //display.display();
+  //delay(1);
+  /******************************************/
+  u8g2.drawPixel(*x_pos + 10, 8);
+  u8g2.drawPixel(*x_pos + 10, 9);
+  u8g2.drawPixel(*x_pos + 11, 10);
+  u8g2.drawPixel(*x_pos + 11, 11);
+  //display.display();
+  //delay(1);
+  /******************************************/
+  u8g2.drawPixel(*x_pos + 12, 10);
+  u8g2.drawPixel(*x_pos + 12, 9);
+  u8g2.drawPixel(*x_pos + 12, 8);
+  u8g2.drawPixel(*x_pos + 12, 7);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 13, 6);
+  u8g2.drawPixel(*x_pos + 13, 5);
+  u8g2.drawPixel(*x_pos + 13, 4);
+  u8g2.drawPixel(*x_pos + 13, 3);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 14, 2);
+  u8g2.drawPixel(*x_pos + 14, 1);
+  u8g2.drawPixel(*x_pos + 14, 0);
+  u8g2.drawPixel(*x_pos + 14, 0);
+  //display.display();
+  //delay(1);
+  /******************************************/
+  u8g2.drawPixel(*x_pos + 15, 0);
+  u8g2.drawPixel(*x_pos + 15, 1);
+  u8g2.drawPixel(*x_pos + 15, 2);
+  u8g2.drawPixel(*x_pos + 15, 3);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 15, 4);
+  u8g2.drawPixel(*x_pos + 15, 5);
+  u8g2.drawPixel(*x_pos + 16, 6);
+  u8g2.drawPixel(*x_pos + 16, 7);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 16, 8);
+  u8g2.drawPixel(*x_pos + 16, 9);
+  u8g2.drawPixel(*x_pos + 16, 10);
+  u8g2.drawPixel(*x_pos + 16, 11);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 17, 12);
+  u8g2.drawPixel(*x_pos + 17, 13);
+  u8g2.drawPixel(*x_pos + 17, 14);
+  u8g2.drawPixel(*x_pos + 17, 15);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 18, 15);
+  u8g2.drawPixel(*x_pos + 18, 14);
+  u8g2.drawPixel(*x_pos + 18, 13);
+  u8g2.drawPixel(*x_pos + 18, 12);
+  //display.display();
+  //delay(1);
+  u8g2.drawPixel(*x_pos + 19, 11);
+  u8g2.drawPixel(*x_pos + 19, 10);
+  u8g2.drawPixel(*x_pos + 19, 9);
+  u8g2.drawPixel(*x_pos + 19, 8);
+  //display.display();
+  //delay(1);
+  /****************************************************/
+  u8g2.drawPixel(*x_pos + 20, 8);
+  u8g2.drawPixel(*x_pos + 21, 8);
+  //display.display();
+  //delay(1);
+  /****************************************************/
+  u8g2.drawPixel(*x_pos + 22, 7);
+  u8g2.drawPixel(*x_pos + 23, 6);
+  u8g2.drawPixel(*x_pos + 24, 6);
+  u8g2.drawPixel(*x_pos + 25, 7);
+  //display.display();
+  //delay(1);
+  /************************************************/
+  u8g2.drawPixel(*x_pos + 26, 8);
+  u8g2.drawPixel(*x_pos + 27, 8);
+  u8g2.drawPixel(*x_pos + 28, 8);
+  u8g2.drawPixel(*x_pos + 29, 8);
+  u8g2.drawPixel(*x_pos + 30, 8); // -----
+  *x_pos = *x_pos + 30;
+  delay(1);
+}
