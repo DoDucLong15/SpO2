@@ -2,19 +2,19 @@
 #include "MAX30100_PulseOximeter.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+//RGB module
+#define RED 14
+#define GREEN 27
+#define BLUE 26
+//oled 0.96inch
 #define ENABLE_MAX30100 1
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 //64 // OLED display height, in pixels
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-// The pins for I2C are defined by the Wire-library.
-// On an arduino UNO:       A4(SDA), A5(SCL)
-// On an arduino MEGA 2560: 20(SDA), 21(SCL)
-// On an arduino LEONARDO:   2(SDA),  3(SCL), ...
 #define OLED_RESET     -1 // 4 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3c ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #if ENABLE_MAX30100
-#define REPORTING_PERIOD_MS     5000
+#define REPORTING_PERIOD_MS 5000
 // PulseOximeter is the higher level interface to the sensor
 // it offers:
 //  * beat detection reporting
@@ -39,6 +39,10 @@ void setup()
     Serial.println(F("SSD1306 allocation failed"));
     for (;;); // Don't proceed, loop forever
   }
+  //setup module rgb
+  pinMode(RED, OUTPUT);
+  pinMode(GREEN, OUTPUT);
+  pinMode(BLUE, OUTPUT);
   // Show initial display buffer contents on the screen --
   // the library initializes this with an Adafruit splash screen.
   //display.display();
@@ -98,10 +102,21 @@ void loop()
     //Serial.println("%");
     tsLastReport = millis();
     display_data(bpm, spo2);
+    if(bpm == 0) setColor(255,255,255);
+    else if(bpm > 120) setColor(255,0,0); //RED
+    else if(bpm < 40) setColor(0,0,255); //BLUE
+    else setColor(0,255,0);
   }
 #endif
   drawLine(&xPos);
 }
+
+void setColor(int R, int G, int B) {
+  analogWrite(RED,   R);
+  analogWrite(GREEN, G);
+  analogWrite(BLUE,  B);
+}
+
 void display_data(int bpm, int spo2) {
   display.fillRect(0, 18, 127, 15, SSD1306_BLACK);
   display.setTextSize(1);
