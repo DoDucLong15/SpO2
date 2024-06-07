@@ -30,8 +30,12 @@
 //  3.3V ---  VCC,
 ```
 
-- The Buzzer Setup: Define the writing Pasive Buzzer
+- The Module RGB Setup: Define the writing Pasive Buzzer
 ```
+//  14  ---  R,
+//  27  ---  G,
+//  26  ---  B,
+//  GND ---  GND,
 ```
 
 
