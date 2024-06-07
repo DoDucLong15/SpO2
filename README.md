@@ -1,7 +1,7 @@
 
 
 # Bài tập lớn hệ nhúng: Đo nhịp tim và nồng độ O2
-![Project](spo2.png)
+![Project](spo2.jpg)
 
 ## Introduction
 
