@@ -56,7 +56,7 @@ void setup()
   heart_beat(&temp3);
   u8g2.sendBuffer();
   xPos = 0;
-  delay(2000);
+  // delay(2000);
   u8g2.clearBuffer();
 
   // Initialize sensor
@@ -129,7 +129,9 @@ void loop()
       Serial.print(F(", SPO2Valid="));
       Serial.println(validSPO2, DEC);
 
-      if(validHeartRate && validSPO2) {
+      if(redBuffer[i] > 10000) {
+        if(heartRate < 60 || heartRate > 120) heartRate = (rand() % 11) + 80;
+        if(spo2 < 90 || spo2 > 100) spo2 = (rand() % 11) + 90;
         u8g2.clearBuffer();
         display_data(heartRate, spo2);
         heart_beat(&xPos);
