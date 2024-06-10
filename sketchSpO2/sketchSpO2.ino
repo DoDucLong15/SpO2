@@ -2,56 +2,59 @@
 #include "MAX30100_PulseOximeter.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-//RGB module
+
+// RGB module
 #define RED 14
 #define GREEN 27
 #define BLUE 26
-//oled 0.96inch
+
+// OLED 0.96inch
 #define ENABLE_MAX30100 1
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 //64 // OLED display height, in pixels
-#define OLED_RESET     -1 // 4 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3c ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 #if ENABLE_MAX30100
-#define REPORTING_PERIOD_MS 5000
-// PulseOximeter is the higher level interface to the sensor
-// it offers:
-//  * beat detection reporting
-//  * heart rate calculation
-//  * SpO2 (oxidation level) calculation
+#define REPORTING_PERIOD_MS 2500
+
 PulseOximeter pox;
 #endif
+
 uint32_t tsLastReport = 0;
+uint32_t tsInvalidStart = 0; // Time when values started becoming invalid
 int xPos = 0;
+const uint32_t INVALID_THRESHOLD_MS = 2000; // 2 seconds
+
 // Callback (registered below) fired when a pulse is detected
-void onBeatDetected()
-{
+void onBeatDetected() {
   Serial.println("Beat!");
   heart_beat(&xPos);
 }
-void setup()
-{
+
+void setup() {
   Serial.begin(115200);
   Serial.println("SSD1306 128x64 OLED TEST");
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;); // Don't proceed, loop forever
   }
-  //setup module rgb
+
+  // Setup module RGB
   pinMode(RED, OUTPUT);
   pinMode(GREEN, OUTPUT);
   pinMode(BLUE, OUTPUT);
-  // Show initial display buffer contents on the screen --
-  // the library initializes this with an Adafruit splash screen.
-  //display.display();
+
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(20, 18);
-  // Display static text
   display.print("Pulse OxiMeter");
+
   int temp1 = 0;
   int temp2 = 40;
   int temp3 = 80;
@@ -61,60 +64,69 @@ void setup()
   xPos = 0;
   display.display();
   delay(2000); // Pause for 2 seconds
+
   display.cp437(true);
   display.clearDisplay();
+
   Serial.print("Initializing pulse oximeter..");
+
 #if ENABLE_MAX30100
-  // Initialize the PulseOximeter instance
-  // Failures are generally due to an improper I2C wiring, missing power supply
-  // or wrong target chip
   if (!pox.begin()) {
     Serial.println("FAILED");
     for (;;);
   } else {
     Serial.println("SUCCESS");
   }
-  // The default current for the IR LED is 50mA and it could be changed
-  //   by uncommenting the following line. Check MAX30100_Registers.h for all the
-  //   available options.
+
   pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
-  // Register a callback for the beat detection
   pox.setOnBeatDetectedCallback(onBeatDetected);
+
   display_data(0, 0);
 #endif
 }
-void loop()
-{
+
+void loop() {
 #if ENABLE_MAX30100
-  // Make sure to call update as fast as possible
   pox.update();
+
   int bpm = 0;
   int spo2 = 0;
-  // Asynchronously dump heart rate and oxidation levels to the serial
-  // For both, a value of 0 means "invalid"
+  bool validData = false;
+
   if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
-    //Serial.print("Heart rate:");
     bpm = pox.getHeartRate();
     spo2 = pox.getSpO2();
     Serial.println(bpm);
-    //Serial.print("bpm / SpO2:");
     Serial.println(spo2);
-    //Serial.println("%");
+
     tsLastReport = millis();
-    display_data(bpm, spo2);
-    if(bpm == 0) setColor(255,255,255);
-    else if(bpm > 120) setColor(255,0,0); //RED
-    else if(bpm < 40) setColor(0,0,255); //BLUE
-    else setColor(0,255,0);
+
+    if (bpm > 0 && spo2 > 0) {
+      validData = true;
+      tsInvalidStart = 0; // Reset invalid start time
+      display_data(bpm, spo2);
+      if (bpm > 120) setColor(255, 0, 0); // RED
+      else if (bpm < 40) setColor(0, 0, 255); // BLUE
+      else setColor(0, 255, 0); // GREEN
+    } 
+    else {
+      if (tsInvalidStart == 0) {
+        tsInvalidStart = millis(); // Mark the start time of invalid data
+      } else if (millis() - tsInvalidStart > INVALID_THRESHOLD_MS) {
+        // If values have been invalid for the threshold duration
+        display_data(0, 0);
+        setColor(255, 255, 255); // White light
+      }
+    }
   }
 #endif
   drawLine(&xPos);
 }
 
 void setColor(int R, int G, int B) {
-  analogWrite(RED,   R);
+  analogWrite(RED, R);
   analogWrite(GREEN, G);
-  analogWrite(BLUE,  B);
+  analogWrite(BLUE, B);
 }
 
 void display_data(int bpm, int spo2) {
