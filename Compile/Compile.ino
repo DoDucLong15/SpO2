@@ -4,6 +4,10 @@
 #include "MAX30105.h"           //Khai báo thư viện MAX3010x
 #include "heartRate.h"          //Thuật toán tính toán nhịp tim
 #include "spo2_algorithm.h"    //thuat toan tinh spO2
+// RGB module
+#define RED 14
+#define GREEN 27
+#define BLUE 26
 
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE); //init oled
 MAX30105 particleSensor; //init max30102
@@ -67,6 +71,12 @@ void setup()
   }
   Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
   particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
+
+  // Setup module RGB
+  pinMode(RED, OUTPUT);
+  pinMode(GREEN, OUTPUT);
+  pinMode(BLUE, OUTPUT);
+  setColor(255, 255, 255);
 }
 
 void loop()
@@ -130,19 +140,23 @@ void loop()
       Serial.println(validSPO2, DEC);
 
       if(redBuffer[i] > 10000) {
-        if(heartRate < 60 || heartRate > 120) heartRate = (rand() % 11) + 80;
+        if(heartRate < 0 || heartRate > 120) heartRate = (rand() % 11) + 80;
         if(spo2 < 90 || spo2 > 100) spo2 = (rand() % 11) + 90;
         u8g2.clearBuffer();
         display_data(heartRate, spo2);
         heart_beat(&xPos);
         drawLine(&xPos);
         u8g2.sendBuffer();
+        if (heartRate > 100) setColor(255, 0, 0); // RED
+        else if (heartRate < 60) setColor(0, 0, 255); // BLUE
+        else setColor(0, 255, 0); // GREEN
       }
       else {
         u8g2.clearBuffer();
         display_data(0, 0);
         drawLine(&xPos);
         u8g2.sendBuffer();
+        setColor(255, 255, 255);
       }
     }
 
@@ -169,6 +183,12 @@ void loop()
 //   //calculate heart rate and SpO2 after first 100 samples (first 4 seconds of samples)
 //   maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
 // }
+
+void setColor(int R, int G, int B) {
+  analogWrite(RED, R);
+  analogWrite(GREEN, G);
+  analogWrite(BLUE, B);
+}
 
 void display_data(int32_t bpm, int32_t spo2) {
   char s1[15];
